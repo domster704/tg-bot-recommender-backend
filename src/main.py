@@ -5,26 +5,34 @@ import uvicorn
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
+from src.application.usecase.movie_lens.movie_lens_import import MovieLensImportUseCase
+from src.application.usecase.recommender.recommender_builder import RecommenderBuilderUseCase
 from src.infrastructure.db.db import init_db
 from src.presentation.api.router_v1 import api_v1_router
-from src.presentation.dependencies.movie_lens.movie_lens_impot import get_movie_lens_import_use_case
-
+from src.presentation.dependencies.movie_lens.movie_lens_impot import (
+    get_movie_lens_import_use_case,
+)
+from src.presentation.dependencies.recommender.recommender_builder import recommender_builder
 
 # from starlette.middleware.sessions import SessionMiddleware
 
 # from src.presentation.middlewares.auth import AuthMiddleware
+
+recommender = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
 
-    movie_lens_import_use_case = get_movie_lens_import_use_case()
+    movie_lens_import_use_case: MovieLensImportUseCase = get_movie_lens_import_use_case()
     movie_lens_path = Path(
         r"C:\Users\isupov\YandexDisk\Programming\University\ERS\async-collaborative-filtering\async-collaborative-filtering-backend\assets"
     )
     await movie_lens_import_use_case.execute(movie_lens_path)
 
+    recommender_builder_use_case: RecommenderBuilderUseCase = recommender_builder()
+    await recommender_builder_use_case.execute()
     yield
 
     pass
