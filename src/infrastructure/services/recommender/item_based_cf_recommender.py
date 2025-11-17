@@ -1,10 +1,11 @@
 from collections import defaultdict
 from math import sqrt
+from typing import Callable, Awaitable
 
 from src.domain.entities.movie_lens.movie import Movie
 from src.domain.entities.movie_lens.raitings import Rating
 from src.domain.interfaces.recommender import IRecommender
-from src.domain.services.recommender.similarity_cache import ISimilarityCache
+from src.domain.interfaces.similarity_cache import ISimilarityCache
 
 
 class ItemBasedCFRecommender(IRecommender):
@@ -25,22 +26,33 @@ class ItemBasedCFRecommender(IRecommender):
         # user.id -> movie.id -> rating
         self.user_ratings: dict[int, dict[int, int]] = defaultdict(dict)
 
-    async def build(self, ratings: list[Rating], movies: list[Movie]) -> None:
+    async def build(
+        self,
+        ratings_loader: Callable[[], Awaitable[list[Rating]]],
+        movies_loader: Callable[[], Awaitable[list[Movie]]],
+    ) -> None:
         if self.cache:
             matrix = await self.cache.load()
             if matrix:
                 self.similarity_matrix = matrix
                 return
 
+        ratings = await ratings_loader()
+        movies = await movies_loader()
+
         print("Загружено рейтингов:", len(ratings))
 
-        for rating in ratings:
-            self.user_ratings[rating.user.id][rating.movie.id] = rating.rating
-
+        self._fill_user_ratings(ratings)
         self._build_similarity_matrix(movies)
+
+        print("Матрица сходства фильмов построена")
+
         if self.cache:
             await self.cache.save(self.similarity_matrix)
-        print("Матрица сходства фильмов построена")
+
+    def _fill_user_ratings(self, ratings: list[Rating]) -> None:
+        for rating in ratings:
+            self.user_ratings[rating.user.id][rating.movie.id] = rating.rating
 
     def _build_similarity_matrix(self, movies: list[Movie]) -> None:
         """

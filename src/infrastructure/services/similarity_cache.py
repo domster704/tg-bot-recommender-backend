@@ -1,7 +1,7 @@
 import pickle
 from pathlib import Path
 
-from src.domain.services.recommender.similarity_cache import ISimilarityCache
+from src.domain.interfaces.similarity_cache import ISimilarityCache
 
 
 class PickleSimilarityCache(ISimilarityCache):
@@ -12,6 +12,7 @@ class PickleSimilarityCache(ISimilarityCache):
         if not self.path.exists():
             return None
 
+        print("Загружаем данные из кэша")
         with open(self.path, "rb") as f:
             return pickle.load(f)
 

@@ -4,7 +4,7 @@ from src.application.providers.uow import uow_context
 from src.application.usecase.recommender.recommender_builder import (
     RecommenderBuilderUseCase,
 )
-from src.domain.services.recommender.item_based_cf_recommender import (
+from src.infrastructure.services.recommender.item_based_cf_recommender import (
     ItemBasedCFRecommender,
 )
 from src.infrastructure.repositories.movie import MovieRepository

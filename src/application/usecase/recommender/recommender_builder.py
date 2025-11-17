@@ -16,8 +16,8 @@ class RecommenderBuilderUseCase:
         self.recommender = recommender
 
     async def execute(self) -> IRecommender:
-        ratings = await self.rating_repository.get_all()
-        movies = await self.movie_repository.get_all()
+        ratings = self.rating_repository.get_all
+        movies = self.movie_repository.get_all
 
         await self.recommender.build(ratings, movies)
         return self.recommender

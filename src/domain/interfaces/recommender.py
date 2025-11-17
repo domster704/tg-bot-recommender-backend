@@ -1,17 +1,25 @@
-from typing import Protocol
+from typing import Protocol, Callable, Awaitable
 
 from src.domain.entities.movie_lens.movie import Movie
 from src.domain.entities.movie_lens.raitings import Rating
 
 
 class IRecommender(Protocol):
-    async def build(self, ratings: list[Rating], movies: list[Movie]) -> None:
+    async def build(
+        self,
+        ratings_loader: Callable[[], Awaitable[list[Rating]]],
+        movies_loader: Callable[[], Awaitable[list[Movie]]],
+    ) -> None:
         """
-        Формирует внутреннюю модель рекомендаций на основе переданных данных
+        Формирует внутреннюю модель рекомендаций на основе переданных данных.
+
+        Метод загружает данные через переданные загрузчики, заполняет структуру
+        пользовательских рейтингов и формирует матрицу сходства фильмов.
+        Если доступен кеш, данные читаются из него и сохраняются после расчёта
 
         Args:
-            ratings: Список всех пользовательских оценок
-            movies: Список всех фильмов, для которых нужно построить модель
+            ratings_loader: Асинхронная функция, возвращающая список всех рейтингов
+            movies_loader: Асинхронная функция, возвращающая список всех фильмов
 
         Returns:
             None
