@@ -32,9 +32,13 @@ class ItemBasedCFRecommender(IRecommender):
         movies_loader: Callable[[], Awaitable[list[Movie]]],
     ) -> None:
         if self.cache:
-            matrix = await self.cache.load()
-            if matrix:
-                self.similarity_matrix = matrix
+            state = await self.cache.load()
+            if state:
+                data = state.get("similarity_matrix", {})
+                self.similarity_matrix = defaultdict(dict, data)
+
+                data = state.get("user_ratings", {})
+                self.user_ratings = defaultdict(dict, data)
                 return
 
         ratings = await ratings_loader()
@@ -48,7 +52,10 @@ class ItemBasedCFRecommender(IRecommender):
         print("Матрица сходства фильмов построена")
 
         if self.cache:
-            await self.cache.save(self.similarity_matrix)
+            await self.cache.save({
+                "similarity_matrix": self.similarity_matrix,
+                "user_ratings": self.user_ratings,
+            })
 
     def _fill_user_ratings(self, ratings: list[Rating]) -> None:
         for rating in ratings:
@@ -179,3 +186,9 @@ class ItemBasedCFRecommender(IRecommender):
                 # Если сходство стало 0 - удаляем связь
                 self.similarity_matrix[movie_id].pop(other_movie_id, None)
                 self.similarity_matrix[other_movie_id].pop(movie_id, None)
+
+        if self.cache:
+            await self.cache.save({
+                "similarity_matrix": self.similarity_matrix,
+                "user_ratings": self.user_ratings,
+            })

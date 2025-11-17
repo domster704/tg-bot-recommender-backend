@@ -17,7 +17,5 @@ class PickleSimilarityCache(ISimilarityCache):
             return pickle.load(f)
 
     async def save(self, matrix):
-        self.path.touch()
-
         with open(self.path, "wb") as f:
             pickle.dump(matrix, f)
