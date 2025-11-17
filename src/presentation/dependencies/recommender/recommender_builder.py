@@ -1,18 +1,29 @@
-from fastapi import Depends
+from pathlib import Path
 
-from src.application.providers.uow import uow_provider
-from src.application.usecase.recommender.recommender_builder import RecommenderBuilderUseCase
-from src.domain.services.recommender.item_based_cf_recommender import ItemBasedCFRecommender
+from src.application.providers.uow import uow_context
+from src.application.usecase.recommender.recommender_builder import (
+    RecommenderBuilderUseCase,
+)
+from src.domain.services.recommender.item_based_cf_recommender import (
+    ItemBasedCFRecommender,
+)
 from src.infrastructure.repositories.movie import MovieRepository
 from src.infrastructure.repositories.rating import RatingRepository
+from src.infrastructure.services.similarity_cache import PickleSimilarityCache
+
+BASE_DIR = Path(__file__).resolve().parents[3]
 
 
-def recommender_builder(uow=Depends(uow_provider)) -> RecommenderBuilderUseCase:
-    rating_repository = RatingRepository(uow)
-    movie_repository = MovieRepository(uow)
+async def recommender_builder() -> RecommenderBuilderUseCase:
+    async with uow_context() as uow:
+        rating_repository = RatingRepository(uow)
+        movie_repository = MovieRepository(uow)
+
+    CACHE_PATH = BASE_DIR / "shared" / "assets" / "similarity.pkl"
+    cache = PickleSimilarityCache(path=CACHE_PATH)
 
     return RecommenderBuilderUseCase(
         rating_repository=rating_repository,
         movie_repository=movie_repository,
-        recommender=ItemBasedCFRecommender()
+        recommender=ItemBasedCFRecommender(cache=cache),
     )

@@ -4,6 +4,7 @@ from math import sqrt
 from src.domain.entities.movie_lens.movie import Movie
 from src.domain.entities.movie_lens.raitings import Rating
 from src.domain.interfaces.recommender import IRecommender
+from src.domain.services.recommender.similarity_cache import ISimilarityCache
 
 
 class ItemBasedCFRecommender(IRecommender):
@@ -13,7 +14,9 @@ class ItemBasedCFRecommender(IRecommender):
     Хранит матрицу схожести фильмов и структуру оценок пользователей
     """
 
-    def __init__(self):
+    def __init__(self, cache: ISimilarityCache | None = None):
+        self.cache = cache
+
         # Матрица схожести фильмов
         # movie1.id -> movie2.id -> cos-similarity
         self.similarity_matrix: dict[int, dict[int, float]] = defaultdict(dict)
@@ -23,13 +26,20 @@ class ItemBasedCFRecommender(IRecommender):
         self.user_ratings: dict[int, dict[int, int]] = defaultdict(dict)
 
     async def build(self, ratings: list[Rating], movies: list[Movie]) -> None:
+        if self.cache:
+            matrix = await self.cache.load()
+            if matrix:
+                self.similarity_matrix = matrix
+                return
+
         print("Загружено рейтингов:", len(ratings))
 
         for rating in ratings:
             self.user_ratings[rating.user.id][rating.movie.id] = rating.rating
 
         self._build_similarity_matrix(movies)
-
+        if self.cache:
+            await self.cache.save(self.similarity_matrix)
         print("Матрица сходства фильмов построена")
 
     def _build_similarity_matrix(self, movies: list[Movie]) -> None:
@@ -39,7 +49,7 @@ class ItemBasedCFRecommender(IRecommender):
         Args:
             movies: Список всех фильмов из базы данных
         """
-        movie_vectors: dict[int, dict[int, int]] = {}
+        movie_vectors: dict[int, dict[int, int]] = defaultdict(dict)
 
         for user, movie_data in self.user_ratings.items():
             for movie_id, rating in movie_data.items():
@@ -50,7 +60,7 @@ class ItemBasedCFRecommender(IRecommender):
         for i, movie1 in enumerate(movie_ids):
             movie1_vector: dict[int, int] = movie_vectors.get(movie1, {})
 
-            for movie2 in movie_ids[i + 1:]:
+            for movie2 in movie_ids[i + 1 :]:
                 movie2_vector: dict[int, int] = movie_vectors.get(movie2, {})
                 similarity: float = self._cosine(movie1_vector, movie2_vector)
 
@@ -83,17 +93,24 @@ class ItemBasedCFRecommender(IRecommender):
 
         return dot / (norm1 * norm2)
 
-    async def recommend_for_user(self, user_id: int, top_n: int = 10) -> list[int]:
+    def _get_movie_vector(self, movie_id: int) -> dict[int, int]:
         """
-        Формирует рекомендации для пользователя
+        Возвращает вектор фильма в формате:
+            user_id -> rating
 
         Args:
-            user_id: Идентификатор пользователя
-            top_n: Количество фильмов, которые нужно вернуть
+            movie_id (int): ID фильма
 
         Returns:
-            Список идентификаторов фильмов, рекомендованных пользователю
+            dict[int, int]: словарь вида {user_id: rating}
         """
+        vector: dict[int, int] = {}
+        for user_id, ratings_by_movie in self.user_ratings.items():
+            if movie_id in ratings_by_movie:
+                vector[user_id] = ratings_by_movie[movie_id]
+        return vector
+
+    async def recommend_for_user(self, user_id: int, top_n: int = 10) -> list[int]:
         if user_id not in self.user_ratings:
             return []
 
@@ -111,7 +128,9 @@ class ItemBasedCFRecommender(IRecommender):
                 weights[similar_movie] += abs(sim)
 
         recommendations: list[tuple[int, float]] = [
-            (mid, scores[mid] / weights[mid]) for mid in scores if weights[mid] > 0
+            (movie_id, scores[movie_id] / weights[movie_id])
+            for movie_id in scores
+            if weights[movie_id] > 0
         ]
 
         recommendations.sort(key=lambda x: x[1], reverse=True)
@@ -119,3 +138,32 @@ class ItemBasedCFRecommender(IRecommender):
             movie_id for movie_id, _ in recommendations[:top_n]
         ]
         return recommended_movie_ids
+
+    async def update_for_rating(self, rating: Rating) -> None:
+        user_id: int = rating.user.id
+        movie_id: int = rating.movie.id
+        value: int = rating.rating
+
+        self.user_ratings[user_id][movie_id] = value
+
+        # Все фильмы, кроме текущего, которые уже оценивал пользователь
+        other_movies: dict[int, int] = {
+            movie_id_: r
+            for movie_id_, r in self.user_ratings[user_id].items()
+            if movie_id_ != movie_id
+        }
+
+        # Пересчитываем косинусное сходство только для пар:
+        for other_movie_id in other_movies.keys():
+            vector1: dict[int, int] = self._get_movie_vector(movie_id)
+            vector2: dict[int, int] = self._get_movie_vector(other_movie_id)
+
+            similarity: float = self._cosine(vector1, vector2)
+
+            if similarity > 0:
+                self.similarity_matrix[movie_id][other_movie_id] = similarity
+                self.similarity_matrix[other_movie_id][movie_id] = similarity
+            else:
+                # Если сходство стало 0 - удаляем связь
+                self.similarity_matrix[movie_id].pop(other_movie_id, None)
+                self.similarity_matrix[other_movie_id].pop(movie_id, None)
