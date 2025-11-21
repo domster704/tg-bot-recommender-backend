@@ -1,6 +1,6 @@
 from src.domain.entities.movie_lens.movie import Movie
 from src.domain.entities.movie_lens.raitings import Rating
-from src.domain.interfaces.recommender import IRecommender
+from src.domain.interfaces.recommender import IRecommender, IRecommenderBuilder
 from src.domain.repositories.base import RepositoryInterface
 
 
@@ -9,7 +9,7 @@ class RecommenderBuilderUseCase:
         self,
         rating_repository: RepositoryInterface[Rating],
         movie_repository: RepositoryInterface[Movie],
-        recommender: IRecommender,
+        recommender: IRecommenderBuilder,
     ):
         self.rating_repository = rating_repository
         self.movie_repository = movie_repository
@@ -19,5 +19,5 @@ class RecommenderBuilderUseCase:
         ratings = self.rating_repository.get_all
         movies = self.movie_repository.get_all
 
-        await self.recommender.build(ratings, movies)
-        return self.recommender
+        recommender_service = await self.recommender.build(ratings, movies)
+        return recommender_service

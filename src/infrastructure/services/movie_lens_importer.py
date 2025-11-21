@@ -1,6 +1,9 @@
 import csv
+import re
 from datetime import datetime
 from pathlib import Path
+
+import pandas as pd
 
 from src.domain.entities.movie_lens.genre import Genre
 from src.domain.entities.movie_lens.movie import Movie
@@ -24,6 +27,7 @@ class MovieLensImporter:
         self.user_file = base_path / "u.user"
         self.movie_file = base_path / "u.item"
         self.rating_file = base_path / "u.data"
+        self.imdb_basics = base_path / "title.basics.tsv"
 
     async def import_all(self):
         async with UnitOfWork() as uow:
@@ -103,7 +107,9 @@ class MovieLensImporter:
 
             for row in reader:
                 movie_id = int(row[0])
+
                 title = row[1]
+
                 release_date_raw = row[2]
                 video_date_raw = row[3]
                 imdb_url = row[4]

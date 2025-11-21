@@ -27,8 +27,8 @@ class CosineSimilarity:
             return 0.0
 
         dot = sum(vec1[user_id] * vec2[user_id] for user_id in user_ids)
-        norm1 = sqrt(sum(v ** 2 for v in vec1.values()))
-        norm2 = sqrt(sum(v ** 2 for v in vec2.values()))
+        norm1 = sqrt(sum(v**2 for v in vec1.values()))
+        norm2 = sqrt(sum(v**2 for v in vec2.values()))
 
         if norm1 == 0 or norm2 == 0:
             return 0.0
